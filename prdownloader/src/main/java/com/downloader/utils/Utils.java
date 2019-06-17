@@ -229,7 +229,7 @@ public final class Utils {
             rootDirectories.add(directoryPath);
         }
 
-        return (String[]) rootDirectories.toArray();
+        return rootDirectories.toArray(new String[0]);
     }
 
     public static String getCorrespondingStorageLocation(Context context, String path)

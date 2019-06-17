@@ -172,15 +172,11 @@ public class DownloadTask {
 
             byte[] buff = new byte[BUFFER_SIZE];
 
+            long offset = isResumeSupported ? request.getDownloadedBytes() : 0;
             DownloadRequest.DownloadDetails downloadDetails = request.getDownloadDetails();
-            OutputStream stream = downloadDetails.createOutputStream(documentFile);
+            OutputStream stream = downloadDetails.createOutputStream(documentFile, offset);
 
             this.outputStream = FileDownloadRandomAccessFile.create(stream);
-
-            if (isResumeSupported && request.getDownloadedBytes() != 0)
-            {
-                outputStream.seek(request.getDownloadedBytes());
-            }
 
             if (request.getStatus() == Status.CANCELLED)
             {
@@ -237,7 +233,7 @@ public class DownloadTask {
                 {
                     deleteFile();
                 }
-                catch (InterruptedException ie) { ie.printStackTrace(); }
+                catch (Exception ie) { ie.printStackTrace(); }
             }
 
             Error error = new Error();
@@ -249,6 +245,10 @@ public class DownloadTask {
         {
             e.printStackTrace();
         }
+        catch (Exception ex)
+        {
+            ex.printStackTrace();
+        }
         finally
         {
             closeAllSafely(outputStream);
@@ -257,7 +257,7 @@ public class DownloadTask {
         return response;
     }
 
-    private DocumentFile getDocumentFile() throws InterruptedException
+    private DocumentFile getDocumentFile() throws Exception
     {
         String storageRoot = request.getDownloadDetails().getStorageRoot();
         DeferredObject obj = new DeferredObject();
@@ -266,16 +266,24 @@ public class DownloadTask {
 
         obj.done(new DoneCallback() {
             @Override
-            public void onDone(Object result) { documentFiles[0] = (DocumentFile)result; }
+            public void onDone(Object result)
+            {
+                if (result instanceof DocumentFile)
+                    documentFiles[0] = (DocumentFile)result;
+                else
+                    documentFiles[0] = null;
+            }
         });
 
         ComponentHolder.getInstance().getStoragePermissionsHandler().OnStoragePermissionRequested(obj, storageRoot);
         promise.waitSafely();
 
+        if (documentFiles[0] == null) throw new Exception("Couldn't obtain DocumentFile most likely because the user chose to reject permission.");
+
         return documentFiles[0];
     }
 
-    private void deleteFile() throws InterruptedException
+    private void deleteFile() throws Exception
     {
         DocumentFile documentFile = getDocumentFile();
         request.getDownloadDetails().removeFile(documentFile);
@@ -290,7 +298,7 @@ public class DownloadTask {
         isResumeSupported = (responseCode == HttpURLConnection.HTTP_PARTIAL);
     }
 
-    private boolean checkIfFreshStartRequiredAndStart(DownloadModel model) throws IOException, IllegalAccessException, InterruptedException
+    private boolean checkIfFreshStartRequiredAndStart(DownloadModel model) throws Exception
     {
         if (responseCode == Constants.HTTP_RANGE_NOT_SATISFIABLE || isETagChanged(model))
         {
@@ -363,7 +371,8 @@ public class DownloadTask {
         }
     }
 
-    private void sync(FileDownloadOutputStream outputStream) {
+    private void sync(FileDownloadOutputStream outputStream)
+    {
         boolean success;
         try {
             outputStream.flushAndSync();

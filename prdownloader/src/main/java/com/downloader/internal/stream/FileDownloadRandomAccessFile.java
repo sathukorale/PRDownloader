@@ -34,10 +34,16 @@ public class FileDownloadRandomAccessFile implements FileDownloadOutputStream {
     }
 
     @Override
-    public void seek(long offset) throws UnsupportedOperationException { throw new UnsupportedOperationException("This method is not supported and should not be called."); }
+    public void seek(long offset) throws UnsupportedOperationException
+    {
+        throw new UnsupportedOperationException("This method is not supported and should not be called.");
+    }
 
     @Override
-    public void setLength(long totalBytes) throws UnsupportedOperationException { throw new UnsupportedOperationException("This method is not supported and should not be called."); }
+    public void setLength(long totalBytes) throws UnsupportedOperationException
+    {
+        throw new UnsupportedOperationException("This method is not supported and should not be called.");
+    }
 
     public static FileDownloadOutputStream create(OutputStream stream) throws IOException {
         return new FileDownloadRandomAccessFile(stream);

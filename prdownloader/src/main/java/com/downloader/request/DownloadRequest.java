@@ -17,7 +17,14 @@
 package com.downloader.request;
 
 import android.content.ContentResolver;
+import android.content.Context;
+import android.os.Build;
+import android.os.ParcelFileDescriptor;
 import android.support.v4.provider.DocumentFile;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
+import android.util.Log;
 
 import com.downloader.Error;
 import com.downloader.OnCancelListener;
@@ -38,7 +45,9 @@ import com.downloader.utils.Utils;
 import org.slf4j.helpers.Util;
 
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.List;
@@ -93,7 +102,7 @@ public class DownloadRequest
             for (String segment : segments)
             {
                 parentDirectory = parentDirectory.findFile(segment);
-                if (parentDirectory == null) continue;
+                if (parentDirectory == null) return null;
             }
 
             return parentDirectory;
@@ -109,8 +118,10 @@ public class DownloadRequest
 
             for (String segment : segments)
             {
-                parentDirectory = parentDirectory.findFile(segment);
-                if (parentDirectory == null) parentDirectory = parentDirectory.createDirectory(segment);
+                DocumentFile foundDirectory = parentDirectory.findFile(segment);
+                if (foundDirectory == null) foundDirectory = parentDirectory.createDirectory(segment);
+
+                parentDirectory = foundDirectory;
             }
 
             parentDirectory = parentDirectory.createFile(_mimeType, _fileName);
@@ -135,6 +146,29 @@ public class DownloadRequest
         {
             DocumentFile file = findOrCreateFile(rootDirectory);
             return ComponentHolder.getInstance().getContext().getContentResolver().openOutputStream(file.getUri());
+        }
+
+        public OutputStream createOutputStream(DocumentFile rootDirectory, long offset) throws FileNotFoundException
+        {
+            DocumentFile file = findOrCreateFile(rootDirectory);
+            Context context = ComponentHolder.getInstance().getContext();
+            ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(file.getUri(), "rw");
+            FileDescriptor fd = pfd.getFileDescriptor();
+
+            try
+            {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+                {
+                    Os.lseek(fd, offset, OsConstants.SEEK_SET);
+                }
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+                return null;
+            }
+
+            return new FileOutputStream(fd);
         }
     }
 
