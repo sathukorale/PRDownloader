@@ -19,6 +19,7 @@ package com.downloader.internal;
 import android.content.Context;
 
 import com.downloader.Constants;
+import com.downloader.OnStoragePermissionsRequested;
 import com.downloader.PRDownloader;
 import com.downloader.PRDownloaderConfig;
 import com.downloader.database.AppDbHelper;
@@ -39,6 +40,8 @@ public class ComponentHolder {
     private String userAgent;
     private HttpClient httpClient;
     private DbHelper dbHelper;
+    private Context context;
+    private OnStoragePermissionsRequested storagePermissionsHandler;
 
     public static ComponentHolder getInstance() {
         return INSTANCE;
@@ -50,6 +53,9 @@ public class ComponentHolder {
         this.userAgent = config.getUserAgent();
         this.httpClient = config.getHttpClient();
         this.dbHelper = config.isDatabaseEnabled() ? new AppDbHelper(context) : new NoOpsDbHelper();
+        this.context = config.getContext();
+        this.storagePermissionsHandler = config.getStoragePermissionsHandler();
+
         if (config.isDatabaseEnabled()) {
             PRDownloader.cleanUp(30);
         }
@@ -110,4 +116,7 @@ public class ComponentHolder {
         return httpClient.clone();
     }
 
+    public Context getContext() { return context; }
+
+    public OnStoragePermissionsRequested getStoragePermissionsHandler() { return storagePermissionsHandler; }
 }

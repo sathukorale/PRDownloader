@@ -1,22 +1,21 @@
 package com.downloader.internal.stream;
 
+import android.support.v4.provider.DocumentFile;
+
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
 
 public class FileDownloadRandomAccessFile implements FileDownloadOutputStream {
 
     private final BufferedOutputStream out;
-    private final FileDescriptor fd;
-    private final RandomAccessFile randomAccess;
 
-    private FileDownloadRandomAccessFile(File file) throws IOException {
-        randomAccess = new RandomAccessFile(file, "rw");
-        fd = randomAccess.getFD();
-        out = new BufferedOutputStream(new FileOutputStream(randomAccess.getFD()));
+    private FileDownloadRandomAccessFile(OutputStream stream) throws IOException {
+        out = new BufferedOutputStream(stream);
     }
 
     @Override
@@ -27,27 +26,21 @@ public class FileDownloadRandomAccessFile implements FileDownloadOutputStream {
     @Override
     public void flushAndSync() throws IOException {
         out.flush();
-        fd.sync();
     }
 
     @Override
     public void close() throws IOException {
         out.close();
-        randomAccess.close();
     }
 
     @Override
-    public void seek(long offset) throws IOException {
-        randomAccess.seek(offset);
-    }
+    public void seek(long offset) throws UnsupportedOperationException { throw new UnsupportedOperationException("This method is not supported and should not be called."); }
 
     @Override
-    public void setLength(long totalBytes) throws IOException {
-        randomAccess.setLength(totalBytes);
-    }
+    public void setLength(long totalBytes) throws UnsupportedOperationException { throw new UnsupportedOperationException("This method is not supported and should not be called."); }
 
-    public static FileDownloadOutputStream create(File file) throws IOException {
-        return new FileDownloadRandomAccessFile(file);
+    public static FileDownloadOutputStream create(OutputStream stream) throws IOException {
+        return new FileDownloadRandomAccessFile(stream);
     }
 
 }

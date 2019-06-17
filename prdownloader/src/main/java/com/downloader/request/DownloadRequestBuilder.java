@@ -29,8 +29,7 @@ import java.util.List;
 public class DownloadRequestBuilder implements RequestBuilder {
 
     String url;
-    String dirPath;
-    String fileName;
+    DownloadRequest.DownloadDetails downloadDetails;
     Priority priority = Priority.MEDIUM;
     Object tag;
     int readTimeout;
@@ -38,10 +37,9 @@ public class DownloadRequestBuilder implements RequestBuilder {
     String userAgent;
     HashMap<String, List<String>> headerMap;
 
-    public DownloadRequestBuilder(String url, String dirPath, String fileName) {
+    public DownloadRequestBuilder(String url, DownloadRequest.DownloadDetails downloadDetails) {
         this.url = url;
-        this.dirPath = dirPath;
-        this.fileName = fileName;
+        this.downloadDetails = downloadDetails;
     }
 
     @Override

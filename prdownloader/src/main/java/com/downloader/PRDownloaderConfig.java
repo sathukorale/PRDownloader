@@ -16,6 +16,8 @@
 
 package com.downloader;
 
+import android.content.Context;
+
 import com.downloader.httpclient.DefaultHttpClient;
 import com.downloader.httpclient.HttpClient;
 
@@ -30,6 +32,8 @@ public class PRDownloaderConfig {
     private String userAgent;
     private HttpClient httpClient;
     private boolean databaseEnabled;
+    private Context context;
+    private OnStoragePermissionsRequested storagePermissionsHandler;
 
     private PRDownloaderConfig(Builder builder) {
         this.readTimeout = builder.readTimeout;
@@ -37,6 +41,8 @@ public class PRDownloaderConfig {
         this.userAgent = builder.userAgent;
         this.httpClient = builder.httpClient;
         this.databaseEnabled = builder.databaseEnabled;
+        this.context = builder.context;
+        this.storagePermissionsHandler = builder.storagePermissionsHandler;
     }
 
     public int getReadTimeout() {
@@ -79,6 +85,10 @@ public class PRDownloaderConfig {
         this.databaseEnabled = databaseEnabled;
     }
 
+    public Context getContext() { return context; }
+
+    public OnStoragePermissionsRequested getStoragePermissionsHandler() { return storagePermissionsHandler; }
+
     public static Builder newBuilder() {
         return new Builder();
     }
@@ -90,6 +100,8 @@ public class PRDownloaderConfig {
         String userAgent = Constants.DEFAULT_USER_AGENT;
         HttpClient httpClient = new DefaultHttpClient();
         boolean databaseEnabled = false;
+        Context context = null;
+        OnStoragePermissionsRequested storagePermissionsHandler = null;
 
         public Builder setReadTimeout(int readTimeout) {
             this.readTimeout = readTimeout;
@@ -116,7 +128,23 @@ public class PRDownloaderConfig {
             return this;
         }
 
-        public PRDownloaderConfig build() {
+        public Builder setContext(Context context)
+        {
+            this.context = context;
+            return this;
+        }
+
+        public Builder setStoragePermissionsHandler(OnStoragePermissionsRequested storagePermissionsHandler)
+        {
+            this.storagePermissionsHandler = storagePermissionsHandler;
+            return this;
+        }
+
+        public PRDownloaderConfig build() throws Exception
+        {
+            if (this.context == null) throw new Exception("'Context' is a required parameter and should be set before calling this method.");
+            if (this.storagePermissionsHandler == null) throw new Exception("'OnStoragePermissionsRequested' is a required parameter and should be set before calling this method.");
+
             return new PRDownloaderConfig(this);
         }
     }

@@ -16,6 +16,8 @@
 
 package com.downloader.internal;
 
+import android.support.v4.provider.DocumentFile;
+
 import com.downloader.Constants;
 import com.downloader.Error;
 import com.downloader.Progress;
@@ -29,11 +31,16 @@ import com.downloader.internal.stream.FileDownloadRandomAccessFile;
 import com.downloader.request.DownloadRequest;
 import com.downloader.utils.Utils;
 
+import org.jdeferred2.DoneCallback;
+import org.jdeferred2.Promise;
+import org.jdeferred2.impl.DeferredObject;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 
 /**
@@ -56,7 +63,6 @@ public class DownloadTask {
     private int responseCode;
     private String eTag;
     private boolean isResumeSupported;
-    private String tempPath;
 
     private DownloadTask(DownloadRequest request) {
         this.request = request;
@@ -66,8 +72,8 @@ public class DownloadTask {
         return new DownloadTask(request);
     }
 
-    Response run() {
-
+    Response run()
+    {
         Response response = new Response();
 
         if (request.getStatus() == Status.CANCELLED) {
@@ -84,14 +90,11 @@ public class DownloadTask {
                 progressHandler = new ProgressHandler(request.getOnProgressListener());
             }
 
-            tempPath = Utils.getTempPath(request.getDirPath(), request.getFileName());
-
-            File file = new File(tempPath);
-
+            DocumentFile documentFile = getDocumentFile();
             DownloadModel model = getDownloadModelIfAlreadyPresentInDatabase();
 
             if (model != null) {
-                if (file.exists()) {
+                if (request.getDownloadDetails().doesFileExist(documentFile)) {
                     request.setTotalBytes(model.getTotalBytes());
                     request.setDownloadedBytes(model.getDownloadedBytes());
                 } else {
@@ -103,13 +106,15 @@ public class DownloadTask {
             }
 
             httpClient = ComponentHolder.getInstance().getHttpClient();
-
             httpClient.connect(request);
 
-            if (request.getStatus() == Status.CANCELLED) {
+            if (request.getStatus() == Status.CANCELLED)
+            {
                 response.setCancelled(true);
                 return response;
-            } else if (request.getStatus() == Status.PAUSED) {
+            }
+            else if (request.getStatus() == Status.PAUSED)
+            {
                 response.setPaused(true);
                 return response;
             }
@@ -120,11 +125,13 @@ public class DownloadTask {
 
             eTag = httpClient.getResponseHeader(Constants.ETAG);
 
-            if (checkIfFreshStartRequiredAndStart(model)) {
+            if (checkIfFreshStartRequiredAndStart(model))
+            {
                 model = null;
             }
 
-            if (!isSuccessful()) {
+            if (!isSuccessful())
+            {
                 Error error = new Error();
                 error.setServerError(true);
                 error.setServerErrorMessage(convertStreamToString(httpClient.getErrorStream()));
@@ -139,7 +146,7 @@ public class DownloadTask {
             totalBytes = request.getTotalBytes();
 
             if (!isResumeSupported) {
-                deleteTempFile();
+                request.getDownloadDetails().removeFile(documentFile);
             }
 
             if (totalBytes == 0) {
@@ -165,34 +172,29 @@ public class DownloadTask {
 
             byte[] buff = new byte[BUFFER_SIZE];
 
-            if (!file.exists()) {
-                if (file.getParentFile() != null && !file.getParentFile().exists()) {
-                    if (file.getParentFile().mkdirs()) {
-                        //noinspection ResultOfMethodCallIgnored
-                        file.createNewFile();
-                    }
-                } else {
-                    //noinspection ResultOfMethodCallIgnored
-                    file.createNewFile();
-                }
-            }
+            DownloadRequest.DownloadDetails downloadDetails = request.getDownloadDetails();
+            OutputStream stream = downloadDetails.createOutputStream(documentFile);
 
-            this.outputStream = FileDownloadRandomAccessFile.create(file);
+            this.outputStream = FileDownloadRandomAccessFile.create(stream);
 
-            if (isResumeSupported && request.getDownloadedBytes() != 0) {
+            if (isResumeSupported && request.getDownloadedBytes() != 0)
+            {
                 outputStream.seek(request.getDownloadedBytes());
             }
 
-            if (request.getStatus() == Status.CANCELLED) {
+            if (request.getStatus() == Status.CANCELLED)
+            {
                 response.setCancelled(true);
                 return response;
-            } else if (request.getStatus() == Status.PAUSED) {
+            }
+            else if (request.getStatus() == Status.PAUSED)
+            {
                 response.setPaused(true);
                 return response;
             }
 
-            do {
-
+            do
+            {
                 final int byteCount = inputStream.read(buff, 0, BUFFER_SIZE);
 
                 if (byteCount == -1) {
@@ -216,39 +218,67 @@ public class DownloadTask {
                     return response;
                 }
 
-            } while (true);
-
-            final String path = Utils.getPath(request.getDirPath(), request.getFileName());
-
-            Utils.renameFileName(tempPath, path);
+            }
+            while (true);
 
             response.setSuccessful(true);
 
-            if (isResumeSupported) {
+            if (isResumeSupported)
+            {
                 removeNoMoreNeededModelFromDatabase();
             }
 
-        } catch (IOException | IllegalAccessException e) {
-            if (!isResumeSupported) {
-                deleteTempFile();
+        }
+        catch (IOException | IllegalAccessException e)
+        {
+            if (!isResumeSupported)
+            {
+                try
+                {
+                    deleteFile();
+                }
+                catch (InterruptedException ie) { ie.printStackTrace(); }
             }
+
             Error error = new Error();
             error.setConnectionError(true);
             error.setConnectionException(e);
             response.setError(error);
-        } finally {
+        }
+        catch (InterruptedException e)
+        {
+            e.printStackTrace();
+        }
+        finally
+        {
             closeAllSafely(outputStream);
         }
 
         return response;
     }
 
-    private void deleteTempFile() {
-        File file = new File(tempPath);
-        if (file.exists()) {
-            //noinspection ResultOfMethodCallIgnored
-            file.delete();
-        }
+    private DocumentFile getDocumentFile() throws InterruptedException
+    {
+        String storageRoot = request.getDownloadDetails().getStorageRoot();
+        DeferredObject obj = new DeferredObject();
+        Promise promise = obj.promise();
+        final DocumentFile[] documentFiles = {null};
+
+        obj.done(new DoneCallback() {
+            @Override
+            public void onDone(Object result) { documentFiles[0] = (DocumentFile)result; }
+        });
+
+        ComponentHolder.getInstance().getStoragePermissionsHandler().OnStoragePermissionRequested(obj, storageRoot);
+        promise.waitSafely();
+
+        return documentFiles[0];
+    }
+
+    private void deleteFile() throws InterruptedException
+    {
+        DocumentFile documentFile = getDocumentFile();
+        request.getDownloadDetails().removeFile(documentFile);
     }
 
     private boolean isSuccessful() {
@@ -260,13 +290,16 @@ public class DownloadTask {
         isResumeSupported = (responseCode == HttpURLConnection.HTTP_PARTIAL);
     }
 
-    private boolean checkIfFreshStartRequiredAndStart(DownloadModel model) throws IOException,
-            IllegalAccessException {
-        if (responseCode == Constants.HTTP_RANGE_NOT_SATISFIABLE || isETagChanged(model)) {
-            if (model != null) {
+    private boolean checkIfFreshStartRequiredAndStart(DownloadModel model) throws IOException, IllegalAccessException, InterruptedException
+    {
+        if (responseCode == Constants.HTTP_RANGE_NOT_SATISFIABLE || isETagChanged(model))
+        {
+            if (model != null)
+            {
                 removeNoMoreNeededModelFromDatabase();
             }
-            deleteTempFile();
+
+            deleteFile();
             request.setDownloadedBytes(0);
             request.setTotalBytes(0);
             httpClient = ComponentHolder.getInstance().getHttpClient();
@@ -275,15 +308,17 @@ public class DownloadTask {
             responseCode = httpClient.getResponseCode();
             return true;
         }
+
         return false;
     }
 
-    private boolean isETagChanged(DownloadModel model) {
-        return !(eTag == null || model == null || model.getETag() == null)
-                && !model.getETag().equals(eTag);
+    private boolean isETagChanged(DownloadModel model)
+    {
+        return !(eTag == null || model == null || model.getETag() == null) && !model.getETag().equals(eTag);
     }
 
-    private DownloadModel getDownloadModelIfAlreadyPresentInDatabase() {
+    private DownloadModel getDownloadModelIfAlreadyPresentInDatabase()
+    {
         return ComponentHolder.getInstance().getDbHelper().find(request.getDownloadId());
     }
 
@@ -292,8 +327,9 @@ public class DownloadTask {
         model.setId(request.getDownloadId());
         model.setUrl(request.getUrl());
         model.setETag(eTag);
-        model.setDirPath(request.getDirPath());
-        model.setFileName(request.getFileName());
+        model.setDirPath(request.getDownloadDetails().getParentDirectory());
+        model.setFileName(request.getDownloadDetails().getFileName());
+        model.setMimeType(request.getDownloadDetails().getMimeType());
         model.setDownloadedBytes(request.getDownloadedBytes());
         model.setTotalBytes(totalBytes);
         model.setLastModifiedAt(System.currentTimeMillis());

@@ -16,12 +16,21 @@
 
 package com.downloader.utils;
 
+import android.content.Context;
+import android.os.Environment;
+import android.support.v4.provider.DocumentFile;
+
 import com.downloader.Constants;
+import com.downloader.OnStoragePermissionsRequested;
 import com.downloader.core.Core;
 import com.downloader.database.DownloadModel;
 import com.downloader.httpclient.HttpClient;
 import com.downloader.internal.ComponentHolder;
 import com.downloader.request.DownloadRequest;
+
+import org.jdeferred2.DoneCallback;
+import org.jdeferred2.Promise;
+import org.jdeferred2.impl.DeferredObject;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,6 +38,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -43,7 +53,9 @@ public final class Utils {
         // no instance
     }
 
-    public static String getPath(String dirPath, String fileName) {
+    public static String getPath(String dirPath, String fileName)
+    {
+        dirPath = normalizePath(dirPath);
         return dirPath + File.separator + fileName;
     }
 
@@ -71,17 +83,33 @@ public final class Utils {
         }
     }
 
-    public static void deleteTempFileAndDatabaseEntryInBackground(final String path, final int downloadId) {
-        Core.getInstance().getExecutorSupplier().forBackgroundTasks()
-                .execute(new Runnable() {
+    public static void deleteTempFileAndDatabaseEntryInBackground(final DownloadRequest.DownloadDetails downloadDetails, final int downloadId) {
+        Core.getInstance().getExecutorSupplier().forBackgroundTasks().execute(new Runnable()
+        {
                     @Override
-                    public void run() {
+                    public void run()
+                    {
                         ComponentHolder.getInstance().getDbHelper().remove(downloadId);
-                        File file = new File(path);
-                        if (file.exists()) {
-                            //noinspection ResultOfMethodCallIgnored
-                            file.delete();
+
+                        DeferredObject object = new DeferredObject();
+                        Promise promise = object.promise();
+                        OnStoragePermissionsRequested permissionsHandler = ComponentHolder.getInstance().getStoragePermissionsHandler();
+
+                        try
+                        {
+                            object.done(new DoneCallback()
+                            {
+                                @Override
+                                public void onDone(Object result)
+                                {
+                                    downloadDetails.removeFile((DocumentFile)result);
+                                }
+                            });
+                            ;
+                            permissionsHandler.OnStoragePermissionRequested(object, downloadDetails.getStorageRoot());
+                            promise.waitSafely();
                         }
+                        catch (InterruptedException e) { e.printStackTrace(); }
                     }
                 });
     }
@@ -96,13 +124,28 @@ public final class Utils {
                                 .getUnwantedModels(days);
                         if (models != null) {
                             for (DownloadModel model : models) {
-                                final String tempPath = getTempPath(model.getDirPath(), model.getFileName());
                                 ComponentHolder.getInstance().getDbHelper().remove(model.getId());
-                                File file = new File(tempPath);
-                                if (file.exists()) {
-                                    //noinspection ResultOfMethodCallIgnored
-                                    file.delete();
+
+                                final DownloadRequest.DownloadDetails downloadDetails = new DownloadRequest.DownloadDetails(model.getDirPath(), model.getFileName(), "");
+                                DeferredObject object = new DeferredObject();
+                                Promise promise = object.promise();
+                                OnStoragePermissionsRequested permissionsHandler = ComponentHolder.getInstance().getStoragePermissionsHandler();
+
+                                try
+                                {
+                                    object.done(new DoneCallback()
+                                    {
+                                        @Override
+                                        public void onDone(Object result)
+                                        {
+                                            downloadDetails.removeFile((DocumentFile)result);
+                                        }
+                                    });
+
+                                    permissionsHandler.OnStoragePermissionRequested(object, downloadDetails.getStorageRoot());
+                                    promise.waitSafely();
                                 }
+                                catch (InterruptedException e) { e.printStackTrace(); }
                             }
                         }
                     }
@@ -170,4 +213,47 @@ public final class Utils {
                 || code == Constants.HTTP_PERMANENT_REDIRECT;
     }
 
+    /* This method will return the root directories of all the usable storage locations . The output paths does not end with the separator */
+    public static String[] getAllStorageLocations(Context context)
+    {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.KITKAT) throw new UnsupportedOperationException("This method cannot be called on Android systems prior KitKat (4.4)");
+
+        File[] directories = context.getExternalFilesDirs(Environment.DIRECTORY_DCIM);
+        List<String> rootDirectories = new ArrayList<>();
+
+        for (File directory : directories)
+        {
+            String directoryPath = directory.getAbsolutePath();
+            directoryPath = directoryPath.substring(0, directoryPath.indexOf("/Android/"));
+
+            rootDirectories.add(directoryPath);
+        }
+
+        return (String[]) rootDirectories.toArray();
+    }
+
+    public static String getCorrespondingStorageLocation(Context context, String path)
+    {
+        String[] rootDirectories = getAllStorageLocations(context);
+        if (rootDirectories.length == 0) return null;
+
+        // According to the documentation, any value after the first
+        // denotes a removable storage path.
+        for (int index = 0 ; index < rootDirectories.length ; index++)
+        {
+            String removableStorageLocation = rootDirectories[index];
+            if (path.startsWith(removableStorageLocation)) return removableStorageLocation;
+        }
+
+        return null;
+    }
+
+    public static String normalizePath(String path)
+    {
+        path = path.trim();
+        if (path.endsWith(File.separator))
+            path = path.substring(0, path.length() - 1);
+
+        return path;
+    }
 }

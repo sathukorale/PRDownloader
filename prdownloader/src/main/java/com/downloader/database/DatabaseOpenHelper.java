@@ -43,6 +43,7 @@ public class DatabaseOpenHelper extends SQLiteOpenHelper {
                 DownloadModel.ETAG + " VARCHAR, " +
                 DownloadModel.DIR_PATH + " VARCHAR, " +
                 DownloadModel.FILE_NAME + " VARCHAR, " +
+                DownloadModel.MIME_TYPE + " VARCHAR, " +
                 DownloadModel.TOTAL_BYTES + " INTEGER, " +
                 DownloadModel.DOWNLOADED_BYTES + " INTEGER, " +
                 DownloadModel.LAST_MODIFIED_AT + " INTEGER " +

@@ -16,12 +16,16 @@
 
 package com.downloader.request;
 
+import android.content.ContentResolver;
+import android.support.v4.provider.DocumentFile;
+
 import com.downloader.Error;
 import com.downloader.OnCancelListener;
 import com.downloader.OnDownloadListener;
 import com.downloader.OnPauseListener;
 import com.downloader.OnProgressListener;
 import com.downloader.OnStartOrResumeListener;
+import com.downloader.OnStoragePermissionsRequested;
 import com.downloader.Priority;
 import com.downloader.Response;
 import com.downloader.Status;
@@ -31,6 +35,11 @@ import com.downloader.internal.DownloadRequestQueue;
 import com.downloader.internal.SynchronousCall;
 import com.downloader.utils.Utils;
 
+import org.slf4j.helpers.Util;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Future;
@@ -39,13 +48,100 @@ import java.util.concurrent.Future;
  * Created by amitshekhar on 13/11/17.
  */
 
-public class DownloadRequest {
+public class DownloadRequest
+{
+    public static class DownloadDetails
+    {
+        private String _parentDirectory;
+        private String _mimeType;
+        private String _fileName;
+
+        public DownloadDetails(String parentDirectory, String fileName, String mimeType)
+        {
+            _parentDirectory = Utils.normalizePath(parentDirectory);
+            _fileName = fileName;
+            _mimeType = mimeType;
+        }
+
+        public String getParentDirectory() { return _parentDirectory; }
+
+        public String getFileName() { return _fileName; }
+
+        public String getMimeType() { return _mimeType; }
+
+        public String getStorageRoot()
+        {
+            String absolutePath = Utils.getPath(_parentDirectory, _fileName);
+            String externalStorageLocation = Utils.getCorrespondingStorageLocation(ComponentHolder.getInstance().getContext(), absolutePath);
+            return externalStorageLocation;
+        }
+
+        public boolean doesFileExist(DocumentFile rootDirectory)
+        {
+            return getFile(rootDirectory) != null;
+        }
+
+        public DocumentFile getFile(DocumentFile rootDirectory)
+        {
+            String absolutePath = Utils.getPath(_parentDirectory, _fileName);
+            String externalStorageLocation = Utils.getCorrespondingStorageLocation(ComponentHolder.getInstance().getContext(), absolutePath);
+            if (externalStorageLocation == null) return null;
+
+            String[] segments = absolutePath.substring(externalStorageLocation.length() + 1).split(File.separator);
+            DocumentFile parentDirectory = rootDirectory;
+
+            for (String segment : segments)
+            {
+                parentDirectory = parentDirectory.findFile(segment);
+                if (parentDirectory == null) continue;
+            }
+
+            return parentDirectory;
+        }
+
+        public DocumentFile createFile(DocumentFile rootDirectory)
+        {
+            String externalStorageLocation = Utils.getCorrespondingStorageLocation(ComponentHolder.getInstance().getContext(), _parentDirectory);
+            if (externalStorageLocation == null) return null;
+
+            String[] segments = _parentDirectory.substring(externalStorageLocation.length() + 1).split(File.separator);
+            DocumentFile parentDirectory = rootDirectory;
+
+            for (String segment : segments)
+            {
+                parentDirectory = parentDirectory.findFile(segment);
+                if (parentDirectory == null) parentDirectory = parentDirectory.createDirectory(segment);
+            }
+
+            parentDirectory = parentDirectory.createFile(_mimeType, _fileName);
+            return parentDirectory;
+        }
+
+        public void removeFile(DocumentFile rootDirectory)
+        {
+            DocumentFile file = getFile(rootDirectory);
+            if (file != null) file.delete();
+        }
+
+        public DocumentFile findOrCreateFile(DocumentFile rootDirectory)
+        {
+            DocumentFile file = getFile(rootDirectory);
+            if (file == null) file = createFile(rootDirectory);
+
+            return file;
+        }
+
+        public OutputStream createOutputStream(DocumentFile rootDirectory) throws FileNotFoundException
+        {
+            DocumentFile file = findOrCreateFile(rootDirectory);
+            return ComponentHolder.getInstance().getContext().getContentResolver().openOutputStream(file.getUri());
+        }
+    }
 
     private Priority priority;
     private Object tag;
     private String url;
-    private String dirPath;
-    private String fileName;
+    private DownloadDetails downloadDetails;
     private int sequenceNumber;
     private Future future;
     private long downloadedBytes;
@@ -58,14 +154,14 @@ public class DownloadRequest {
     private OnStartOrResumeListener onStartOrResumeListener;
     private OnPauseListener onPauseListener;
     private OnCancelListener onCancelListener;
+    private OnStoragePermissionsRequested onStoragePermissionsRequested;
     private int downloadId;
     private HashMap<String, List<String>> headerMap;
     private Status status;
 
     DownloadRequest(DownloadRequestBuilder builder) {
         this.url = builder.url;
-        this.dirPath = builder.dirPath;
-        this.fileName = builder.fileName;
+        this.downloadDetails = builder.downloadDetails;
         this.headerMap = builder.headerMap;
         this.priority = builder.priority;
         this.tag = builder.tag;
@@ -104,21 +200,7 @@ public class DownloadRequest {
         this.url = url;
     }
 
-    public String getDirPath() {
-        return dirPath;
-    }
-
-    public void setDirPath(String dirPath) {
-        this.dirPath = dirPath;
-    }
-
-    public String getFileName() {
-        return fileName;
-    }
-
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
-    }
+    public DownloadDetails getDownloadDetails() { return this.downloadDetails; }
 
     public int getSequenceNumber() {
         return sequenceNumber;
@@ -223,15 +305,21 @@ public class DownloadRequest {
         return this;
     }
 
+    public DownloadRequest setOnStoragePermissionsRequested(OnStoragePermissionsRequested onStoragePermissionsRequestedListener)
+    {
+        this.onStoragePermissionsRequested = onStoragePermissionsRequested;
+        return this;
+    }
+
     public int start(OnDownloadListener onDownloadListener) {
         this.onDownloadListener = onDownloadListener;
-        downloadId = Utils.getUniqueId(url, dirPath, fileName);
+        downloadId = Utils.getUniqueId(url, downloadDetails.getParentDirectory(), downloadDetails.getFileName());
         DownloadRequestQueue.getInstance().addRequest(this);
         return downloadId;
     }
 
     public Response executeSync() {
-        downloadId = Utils.getUniqueId(url, dirPath, fileName);
+        downloadId = Utils.getUniqueId(url, downloadDetails.getParentDirectory(), downloadDetails.getFileName());
         return new SynchronousCall(this).execute();
     }
 
@@ -307,8 +395,9 @@ public class DownloadRequest {
         if (future != null) {
             future.cancel(true);
         }
+
         deliverCancelEvent();
-        Utils.deleteTempFileAndDatabaseEntryInBackground(Utils.getTempPath(dirPath, fileName), downloadId);
+        Utils.deleteTempFileAndDatabaseEntryInBackground(downloadDetails, downloadId);
     }
 
     private void finish() {
@@ -322,6 +411,7 @@ public class DownloadRequest {
         this.onStartOrResumeListener = null;
         this.onPauseListener = null;
         this.onCancelListener = null;
+        this.onStoragePermissionsRequested = null;
     }
 
     private int getReadTimeoutFromConfig() {

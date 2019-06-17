@@ -27,6 +27,7 @@ public class DownloadModel {
     static final String ETAG = "etag";
     static final String DIR_PATH = "dir_path";
     static final String FILE_NAME = "file_name";
+    static final String MIME_TYPE = "mime_type";
     static final String TOTAL_BYTES = "total_bytes";
     static final String DOWNLOADED_BYTES = "downloaded_bytes";
     static final String LAST_MODIFIED_AT = "last_modified_at";
@@ -36,6 +37,7 @@ public class DownloadModel {
     private String eTag;
     private String dirPath;
     private String fileName;
+    private String mimeType;
     private long totalBytes;
     private long downloadedBytes;
     private long lastModifiedAt;
@@ -79,6 +81,10 @@ public class DownloadModel {
     public void setFileName(String fileName) {
         this.fileName = fileName;
     }
+
+    public String getMimeType() { return mimeType; }
+
+    public void setMimeType(String mimeType) { this.mimeType = mimeType; }
 
     public long getTotalBytes() {
         return totalBytes;

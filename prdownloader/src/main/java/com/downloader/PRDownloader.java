@@ -25,6 +25,7 @@ import android.content.Context;
 import com.downloader.core.Core;
 import com.downloader.internal.ComponentHolder;
 import com.downloader.internal.DownloadRequestQueue;
+import com.downloader.request.DownloadRequest;
 import com.downloader.request.DownloadRequestBuilder;
 import com.downloader.utils.Utils;
 
@@ -46,7 +47,7 @@ public class PRDownloader {
      *
      * @param context The context
      */
-    public static void initialize(Context context) {
+    public static void initialize(Context context) throws Exception {
         initialize(context, PRDownloaderConfig.newBuilder().build());
     }
 
@@ -69,8 +70,8 @@ public class PRDownloader {
      * @param fileName The file name with which file is to be saved
      * @return the DownloadRequestBuilder
      */
-    public static DownloadRequestBuilder download(String url, String dirPath, String fileName) {
-        return new DownloadRequestBuilder(url, dirPath, fileName);
+    public static DownloadRequestBuilder download(String url, String dirPath, String fileName, String mimeType) {
+        return new DownloadRequestBuilder(url, new DownloadRequest.DownloadDetails(dirPath, fileName, mimeType));
     }
 
     /**
