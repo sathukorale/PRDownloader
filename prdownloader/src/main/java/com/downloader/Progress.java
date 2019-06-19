@@ -16,18 +16,22 @@
 
 package com.downloader;
 
+import com.downloader.request.DownloadRequest;
+
 import java.io.Serializable;
 
 /**
  * Created by amitshekhar on 13/11/17.
  */
 
-public class Progress implements Serializable {
-
+public class Progress implements Serializable
+{
+    public DownloadRequest request;
     public long currentBytes;
     public long totalBytes;
 
-    public Progress(long currentBytes, long totalBytes) {
+    public Progress(DownloadRequest request, long currentBytes, long totalBytes)
+    {
         this.currentBytes = currentBytes;
         this.totalBytes = totalBytes;
     }

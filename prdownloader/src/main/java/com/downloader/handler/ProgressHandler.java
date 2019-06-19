@@ -43,7 +43,7 @@ public class ProgressHandler extends Handler {
             case Constants.UPDATE:
                 if (listener != null) {
                     final Progress progress = (Progress) msg.obj;
-                    listener.onProgress(progress);
+                    listener.onProgress(progress.request, progress);
                 }
                 break;
             default:

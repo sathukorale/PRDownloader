@@ -41,6 +41,7 @@ import com.downloader.PRDownloader;
 import com.downloader.PRDownloaderConfig;
 import com.downloader.Progress;
 import com.downloader.Status;
+import com.downloader.request.DownloadRequest;
 import com.sample.utils.Utils;
 
 import org.jdeferred2.impl.DeferredObject;
@@ -117,7 +118,7 @@ public class MainActivity extends AppCompatActivity implements OnStoragePermissi
                         .build()
                         .setOnStartOrResumeListener(new OnStartOrResumeListener() {
                             @Override
-                            public void onStartOrResume() {
+                            public void onStartOrResume(final DownloadRequest request) {
                                 progressBarOne.setIndeterminate(false);
                                 buttonOne.setEnabled(true);
                                 buttonOne.setText(R.string.pause);
@@ -126,13 +127,13 @@ public class MainActivity extends AppCompatActivity implements OnStoragePermissi
                         })
                         .setOnPauseListener(new OnPauseListener() {
                             @Override
-                            public void onPause() {
+                            public void onPause(final DownloadRequest request) {
                                 buttonOne.setText(R.string.resume);
                             }
                         })
                         .setOnCancelListener(new OnCancelListener() {
                             @Override
-                            public void onCancel() {
+                            public void onCancel(final DownloadRequest request) {
                                 buttonOne.setText(R.string.start);
                                 buttonCancelOne.setEnabled(false);
                                 progressBarOne.setProgress(0);
@@ -143,7 +144,7 @@ public class MainActivity extends AppCompatActivity implements OnStoragePermissi
                         })
                         .setOnProgressListener(new OnProgressListener() {
                             @Override
-                            public void onProgress(Progress progress) {
+                            public void onProgress(final DownloadRequest request, Progress progress) {
                                 long progressPercent = progress.currentBytes * 100 / progress.totalBytes;
                                 progressBarOne.setProgress((int) progressPercent);
                                 textViewProgressOne.setText(Utils.getProgressDisplayLine(progress.currentBytes, progress.totalBytes));
@@ -152,14 +153,14 @@ public class MainActivity extends AppCompatActivity implements OnStoragePermissi
                         })
                         .start(new OnDownloadListener() {
                             @Override
-                            public void onDownloadComplete() {
+                            public void onDownloadComplete(final DownloadRequest request) {
                                 buttonOne.setEnabled(false);
                                 buttonCancelOne.setEnabled(false);
                                 buttonOne.setText(R.string.completed);
                             }
 
                             @Override
-                            public void onError(Error error) {
+                            public void onError(final DownloadRequest request, Error error) {
                                 buttonOne.setText(R.string.start);
                                 Toast.makeText(getApplicationContext(), getString(R.string.some_error_occurred) + " " + "1", Toast.LENGTH_SHORT).show();
                                 textViewProgressOne.setText("");

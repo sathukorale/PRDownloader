@@ -16,12 +16,14 @@
 
 package com.downloader;
 
+import com.downloader.request.DownloadRequest;
+
 /**
  * Created by amitshekhar on 13/11/17.
  */
 
 public interface OnProgressListener {
 
-    void onProgress(Progress progress);
+    void onProgress(final DownloadRequest request, Progress progress);
 
 }

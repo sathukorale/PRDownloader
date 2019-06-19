@@ -16,12 +16,13 @@
 
 package com.downloader;
 
+import com.downloader.request.DownloadRequest;
+
 /**
  * Created by amitshekhar on 15/11/17.
  */
 
-public interface OnCancelListener {
-
-    void onCancel();
-
+public interface OnCancelListener
+{
+    void onCancel(final DownloadRequest request);
 }

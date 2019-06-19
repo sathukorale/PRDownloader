@@ -278,7 +278,7 @@ public class DownloadTask {
         ComponentHolder.getInstance().getStoragePermissionsHandler().OnStoragePermissionRequested(obj, storageRoot);
         promise.waitSafely();
 
-        if (documentFiles[0] == null) throw new Exception("Couldn't obtain DocumentFile most likely because the user chose to reject permission.");
+        if (documentFiles[0] == null) throw new Exception("Couldn't obtain DocumentFile most likely because the user chose to reject the permission request.");
 
         return documentFiles[0];
     }
@@ -351,10 +351,7 @@ public class DownloadTask {
     private void sendProgress() {
         if (request.getStatus() != Status.CANCELLED) {
             if (progressHandler != null) {
-                progressHandler
-                        .obtainMessage(Constants.UPDATE,
-                                new Progress(request.getDownloadedBytes(),
-                                        totalBytes)).sendToTarget();
+                progressHandler.obtainMessage(Constants.UPDATE, new Progress(request, request.getDownloadedBytes(), totalBytes)).sendToTarget();
             }
         }
     }

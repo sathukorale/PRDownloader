@@ -42,13 +42,16 @@ import com.downloader.internal.DownloadRequestQueue;
 import com.downloader.internal.SynchronousCall;
 import com.downloader.utils.Utils;
 
+import org.jdeferred2.impl.DefaultDeferredManager;
 import org.slf4j.helpers.Util;
 
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Future;
@@ -148,27 +151,19 @@ public class DownloadRequest
             return ComponentHolder.getInstance().getContext().getContentResolver().openOutputStream(file.getUri());
         }
 
-        public OutputStream createOutputStream(DocumentFile rootDirectory, long offset) throws FileNotFoundException
+        public OutputStream createOutputStream(DocumentFile rootDirectory, long offset) throws IOException
         {
             DocumentFile file = findOrCreateFile(rootDirectory);
             Context context = ComponentHolder.getInstance().getContext();
             ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(file.getUri(), "rw");
             FileDescriptor fd = pfd.getFileDescriptor();
 
-            try
-            {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                {
-                    Os.lseek(fd, offset, OsConstants.SEEK_SET);
-                }
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-                return null;
-            }
+            FileOutputStream stream = new FileOutputStream(fd);
+            FileChannel channel = stream.getChannel();
 
-            return new FileOutputStream(fd);
+            channel.position(offset);
+
+            return stream;
         }
     }
 
@@ -188,7 +183,6 @@ public class DownloadRequest
     private OnStartOrResumeListener onStartOrResumeListener;
     private OnPauseListener onPauseListener;
     private OnCancelListener onCancelListener;
-    private OnStoragePermissionsRequested onStoragePermissionsRequested;
     private int downloadId;
     private HashMap<String, List<String>> headerMap;
     private Status status;
@@ -339,12 +333,6 @@ public class DownloadRequest
         return this;
     }
 
-    public DownloadRequest setOnStoragePermissionsRequested(OnStoragePermissionsRequested onStoragePermissionsRequestedListener)
-    {
-        this.onStoragePermissionsRequested = onStoragePermissionsRequested;
-        return this;
-    }
-
     public int start(OnDownloadListener onDownloadListener) {
         this.onDownloadListener = onDownloadListener;
         downloadId = Utils.getUniqueId(url, downloadDetails.getParentDirectory(), downloadDetails.getFileName());
@@ -364,7 +352,7 @@ public class DownloadRequest
                     .execute(new Runnable() {
                         public void run() {
                             if (onDownloadListener != null) {
-                                onDownloadListener.onError(error);
+                                onDownloadListener.onError(DownloadRequest.this, error);
                             }
                             finish();
                         }
@@ -379,7 +367,7 @@ public class DownloadRequest
                     .execute(new Runnable() {
                         public void run() {
                             if (onDownloadListener != null) {
-                                onDownloadListener.onDownloadComplete();
+                                onDownloadListener.onDownloadComplete(DownloadRequest.this);
                             }
                             finish();
                         }
@@ -393,7 +381,7 @@ public class DownloadRequest
                     .execute(new Runnable() {
                         public void run() {
                             if (onStartOrResumeListener != null) {
-                                onStartOrResumeListener.onStartOrResume();
+                                onStartOrResumeListener.onStartOrResume(DownloadRequest.this);
                             }
                         }
                     });
@@ -406,7 +394,7 @@ public class DownloadRequest
                     .execute(new Runnable() {
                         public void run() {
                             if (onPauseListener != null) {
-                                onPauseListener.onPause();
+                                onPauseListener.onPause(DownloadRequest.this);
                             }
                         }
                     });
@@ -418,7 +406,7 @@ public class DownloadRequest
                 .execute(new Runnable() {
                     public void run() {
                         if (onCancelListener != null) {
-                            onCancelListener.onCancel();
+                            onCancelListener.onCancel(DownloadRequest.this);
                         }
                     }
                 });
@@ -445,7 +433,6 @@ public class DownloadRequest
         this.onStartOrResumeListener = null;
         this.onPauseListener = null;
         this.onCancelListener = null;
-        this.onStoragePermissionsRequested = null;
     }
 
     private int getReadTimeoutFromConfig() {
